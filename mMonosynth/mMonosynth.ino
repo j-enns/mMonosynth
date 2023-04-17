@@ -1,16 +1,7 @@
 #pragma GCC optimize ("-O2")
 #pragma GCC push_options
 
-#include <EnableInterrupt.h>
-
-  uint8_t oscilAtable = 0;
-  uint8_t oscilBtable = 0;
-  volatile uint8_t altOrder = 0;
-  uint8_t lfoFreq = 4;
-  volatile bool awave = false;
-  volatile bool bwave = false;
-  volatile bool order = false;
-  volatile bool lfo = false;
+// Fast pin state check
 
 #define portOfPin(P)\
   (((P)>=0&&(P)<8)?&PORTD:(((P)>7&&(P)<14)?&PORTB:&PORTC))
@@ -30,7 +21,36 @@
 #define isLow(P)((*(pinOfPin(P))& pinMask(P))==0)                         // 
 #define digitalState(P)((uint8_t)isHigh(P))                               // digitalRead( pin ); with digitalState( pin );
 
+
+// Interupts and variables for button reading
+
+#include <EnableInterrupt.h>
+
+  uint8_t oscilAtable = 0;
+  uint8_t oscilBtable = 0;
+  volatile uint8_t altOrder = 0;
+  uint8_t lfoFreq = 4;
+  volatile bool awave = false;
+  volatile bool bwave = false;
+  volatile bool order = false;
+  volatile bool lfo = false;
+
+void interruptAWAVE() {
+  awave = true;
+}
+void interruptBWAVE() {
+  bwave = true;
+}
+void interruptORDER() {
+  order = true;
+}
+void interruptLFO() {
+  lfo = true;
+}
+
+
 // SET UP MOZZI
+
 #include <MozziGuts.h>
 #include <Oscil.h>
 #include <ADSR.h>
@@ -57,7 +77,6 @@ const int8_t * wavetable[4] ={
   SQUARE_SINE_DATA
 };
 
-
 // slide pots
 #define ATTACK      (5)
 #define RELEASE        (4)
@@ -66,6 +85,9 @@ const int8_t * wavetable[4] ={
 #define DETUNE         (1)
 #define NOISE         (0)
 
+uint8_t noisePot = 0;
+uint8_t detunePot = 0;
+
 // buttons
 #define LFO     2
 #define AWAVE     3
@@ -73,10 +95,8 @@ const int8_t * wavetable[4] ={
 #define ORDER     5
 
 
-uint8_t noisePot = 0;
-uint8_t detunePot = 0;
-
 // SET UP MIDI
+
 #include <MIDI.h>
 #include "midi_freq.h"
 
@@ -87,6 +107,9 @@ uint8_t midiNote;      //note
 uint8_t noteBuffer[NOTEON_BUFFER_SIZE];   //buff[BUFFER];
 uint8_t velBuffer[NOTEON_BUFFER_SIZE];
 uint8_t bufferTail = 0;   // buffersize
+
+
+// handle incoming midi
 
 void handleNoteOn(byte channel, byte note, byte velocity) {
   if (velocity == 0) { handleNoteOff(channel, note, velocity); }
@@ -161,19 +184,7 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
 }
 
 
-
-void interruptAWAVE() {
-  awave = true;
-}
-void interruptBWAVE() {
-  bwave = true;
-}
-void interruptORDER() {
-  order = true;
-}
-void interruptLFO() {
-  lfo = true;
-}
+// arduino setup code
 
 void setup() {
   uint8_t midiChannel = 1;
@@ -217,19 +228,21 @@ void setup() {
 }
 
 
+// Mozzi code
+
 void updateControl() {
 
-  MIDI.read();
-  envelope.update();
-  envelopeB.update();
+  MIDI.read();          // process midi in serial buffer
+  envelope.update();    // update ADSR at control rate
+  envelopeB.update();   // update ADSR at control rate
 
-  noisePot = mozziAnalogRead(NOISE) >> 2;  // 0-255
-  detunePot = mozziAnalogRead( DETUNE ) >> 2;
+  noisePot = mozziAnalogRead(NOISE) >> 2;       // 0-255
+  detunePot = mozziAnalogRead( DETUNE ) >> 2;   // 0-255
 
   if (awave == true) {
-    oscilAtable = ( oscilAtable + 1 ) & 3;
+    oscilAtable = ( oscilAtable + 1 ) & 3;      // fast than oscilAtable % 4
     oscilA.setTable(wavetable[oscilAtable]);
-    awave = false;
+    awave = false;                              // turn interupt flag back off
   }
   if (bwave) {
     oscilBtable = ( oscilBtable + 1 ) & 3;
@@ -242,7 +255,7 @@ void updateControl() {
   }
   if (lfo) {
     lfoFreq = ( lfoFreq + 1 ) & 15;
-    oscilLFO.setPhaseInc( pgm_read_word ( &LFO_INC[ lfoFreq ]) );
+    oscilLFO.setPhaseInc( pgm_read_word ( &LFO_INC[ lfoFreq ]) );   // setPhaseInc is faster than setFreq with pre-computed values
     lfo = false;
   }
 
@@ -263,6 +276,14 @@ AudioOutput_t updateAudio() {
   int8_t lfoNext = oscilLFO.next();
   Q15n16 modulation = (Q15n16) detunePot * lfoNext;
 
+/*
+Generation Algarithms
+0-3 use lfo for sutle detune/vibrato effect
+4-7 detune oscilB by up to 16 semitones
+1,3,7 phase modulate oscilA
+4,5 do NOT phase modulate oscilB
+2,3,5 use sepate envelopes for oscilA and oscilB
+*/
 if (altOrder == 1 ) {
   //Q15n16 antiMod = (Q15n16) detunePot * (-lfoNext);
   //int outA = oscilA.phMod(antiMod) << 1;        // +- 256   (8bit + 1 = 9 bits)
@@ -323,6 +344,8 @@ else {
   return MonoOutput::from16Bit(out);
 }
 
+
+// arduino loop block
 
 void loop() {
   audioHook();

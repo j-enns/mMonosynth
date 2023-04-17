@@ -1,6 +1,7 @@
 #ifndef MIDI_FREQUENCY
 #define MIDI_FREQUENCY
 
+//phase increments for  midi note frequencies. 
 const unsigned long PHASE_INC [] PROGMEM = {
   66976, 70958, 75178, 79648, 84384, 89402, 94718, 100350, 
   106318, 112640, 119337, 126434, 133952, 141917, 150356, 159297, 
@@ -20,15 +21,10 @@ const unsigned long PHASE_INC [] PROGMEM = {
   68583576, 72661760, 76982456, 81560072, 86409888, 91548088, 96991816, 102759248
 };
 
-const unsigned long LFO_INC [] PROGMEM = {
+//phase increments for lfo 
+const unsigned int LFO_INC [] PROGMEM = {
   361, 511, 723, 1023, 1447, 2047, 2895, 4095,
   5792, 8191, 11584, 16383, 23169, 32767, 46340, 65535
 };
-
-/*
-const unsigned int LFO_INC [] PROGMEM = {
-  406, 840, 1736, 3589, 7420, 15337, 31704, 65535
-};
-*/
 
  #endif /* MIDI_FREQUENCY */
