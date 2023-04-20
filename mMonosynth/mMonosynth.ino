@@ -102,7 +102,7 @@ uint8_t detunePot = 0;
 
 MIDI_CREATE_DEFAULT_INSTANCE();
 
-#define NOTEON_BUFFER_SIZE 32    //BUFFER
+#define NOTEON_BUFFER_SIZE 16    //BUFFER
 uint8_t midiNote;      //note
 uint8_t noteBuffer[NOTEON_BUFFER_SIZE];   //buff[BUFFER];
 uint8_t velBuffer[NOTEON_BUFFER_SIZE];
@@ -171,7 +171,7 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
       envelopeB.noteOff();
       envelope.noteOff();
     } else {
-      handleNoteOn(20, noteBuffer[bufferTail - 1], velBuffer[bufferTail - 1]);
+      handleNoteOn(20, noteBuffer[bufferTail-1], velBuffer[bufferTail-1]);
     }
   } else {
     bufferTail = 0;
@@ -183,10 +183,21 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
   }
 }
 
+//void handleStop() {
+void __attribute__((optimize("Os"))) handleStop() {
+  for (int i=0; i <= bufferTail; i++) {
+    noteBuffer[i] = 0;
+    velBuffer[i] = 0;
+  }
+  bufferTail = 0;
+  envelopeB.noteOff();
+  envelope.noteOff();
+}
+
 
 // arduino setup code
 
-void setup() {
+void __attribute__((optimize("Os"))) setup() {
   uint8_t midiChannel = 1;
   pinMode(AWAVE, INPUT_PULLUP);
   pinMode(BWAVE, INPUT_PULLUP);
@@ -208,6 +219,7 @@ void setup() {
 
   MIDI.setHandleNoteOn(handleNoteOn);  // Put only the name of the function
   MIDI.setHandleNoteOff(handleNoteOff);  // Put only the name of the function
+  MIDI.setHandleStop(handleStop);  // Put only the name of the function
 
   MIDI.begin(midiChannel);
   MIDI.turnThruOff();
